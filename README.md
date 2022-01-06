@@ -1,4 +1,4 @@
-# coba ![Node.js CI](https://github.com/ejz/coba/actions/workflows/node.js.yml/badge.svg?branch=master)
+# coba ![CI](https://github.com/ejz/coba/actions/workflows/ci.yml/badge.svg?branch=master)
 
 > _COBA - means "owl"_ 🦉
 
