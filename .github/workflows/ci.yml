@@ -22,6 +22,10 @@ jobs:
   
   publish:
     needs: [test]
+    env:
+      NPM_USER: ${{ secrets.NPM_USER_SECRET }}
+      NPM_PASS: ${{ secrets.NPM_PASS_SECRET }}
+      NPM_EMAIL: ${{ secrets.NPM_EMAIL_SECRET }}
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
@@ -29,6 +33,7 @@ jobs:
       with:
         node-version: 14.x
         cache: 'npm'
+    - run: npm i -g npm-cli-login
+    - run: npm-cli-login
     - run: npm ci
-    - run: echo ${{ secrets.NPM_REP_CREDS }} | base64 -d | npm login
     - run: npm publish
