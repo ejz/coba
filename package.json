@@ -1,6 +1,6 @@
 {
     "name": "coba-storage",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "main": "di.js",
     "bin": {
         "coba": "bin.js"
@@ -35,5 +35,9 @@
         "webpack": "^5.52.0",
         "webpack-cli": "^4.8.0",
         "webpack-node-externals": "^3.0.0"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git://github.com/ejz/coba.git"
     }
 }
