@@ -24,10 +24,11 @@ jobs:
     needs: [test]
     runs-on: ubuntu-latest
     steps:
+    - uses: actions/checkout@v2
     - uses: actions/setup-node@v2
       with:
         node-version: 14.x
         cache: 'npm'
-    - run: echo -e ${{ secrets.NPM_SECRET }} | md5sum -
-    - run: echo -e ${{ secrets.NPM_SECRET }} | npm login
+    - run: npm ci
+    - run: echo ${{ secrets.NPM_REP_CREDS }} | base64 -d | npm login
     - run: npm publish
