@@ -23,9 +23,7 @@ jobs:
   publish:
     needs: [test]
     env:
-      NPM_USER: ${{ secrets.NPM_USER_SECRET }}
-      NPM_PASS: ${{ secrets.NPM_PASS_SECRET }}
-      NPM_EMAIL: ${{ secrets.NPM_EMAIL_SECRET }}
+      NPM_TOKEN_SECRET: ${{ secrets.NPM_TOKEN_SECRET }}
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
@@ -33,7 +31,7 @@ jobs:
       with:
         node-version: 14.x
         cache: 'npm'
-    - run: npm i -g npm-cli-login
-    - run: npm-cli-login
+    - run: echo -n '//registry.npmjs.org/:_authToken=' >.npmrc
+    - run: echo $NPM_TOKEN_SECRET >>.npmrc
     - run: npm ci
     - run: npm publish
