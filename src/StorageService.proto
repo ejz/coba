@@ -1,0 +1,191 @@
+syntax = "proto3";
+
+message Empty {}
+
+message Record {
+    uint32 id = 1;
+    map<string, string> values = 2;
+}
+
+enum EnumFieldType {
+    Number = 0;
+    NumberIndex = 1;
+    Boolean = 2;
+    BooleanIndex = 3;
+    String = 4;
+    StringIndex = 5;
+    Fulltext = 6;
+    Parent = 7;
+    Unique = 8;
+    Counter = 9;
+    Object = 10;
+    BooleanArray = 11;
+    Date = 12;
+    DateArray = 13;
+    DateSet = 14;
+    Datetime = 15;
+    DatetimeArray = 16;
+    DatetimeSet = 17;
+    Enum = 18;
+    EnumArray = 19;
+    EnumArrayIndex = 20;
+    EnumIndex = 21;
+    EnumSet = 22;
+    EnumSetIndex = 23;
+    NumberArray = 24;
+    NumberArrayIndex = 25;
+    NumberSet = 26;
+    NumberSetIndex = 27;
+    StringArray = 28;
+    StringArrayIndex = 29;
+    StringSet = 30;
+    StringSetIndex = 31;
+}
+
+message Field {
+    EnumFieldType type = 1;
+    bool notnull = 2;
+    string min = 3;
+    string max = 4;
+    uint32 precision = 5;
+    string parent = 6;
+    string child = 7;
+    repeated string fields = 8;
+    bool trackall = 9;
+    bool lowrank = 10;
+    repeated string values = 11;
+    string evaluate = 12;
+}
+
+service StorageService {
+    // List
+    rpc List (Empty) returns (ListResponse);
+        message ListResponse {
+            repeated string repositories = 1;
+        }
+
+    // Create
+    rpc Create (CreateRequest) returns (CreateResponse) {}
+        message CreateRequest {
+            string repository = 1;
+            map<string, Field> fields = 2;
+        }
+        message CreateResponse {
+            bool created = 1;
+        }
+
+    // Drop
+    rpc Drop (DropRequest) returns (DropResponse) {}
+        message DropRequest {
+            string repository = 1;
+        }
+        message DropResponse {
+            bool dropped = 1;
+        }
+
+    // Exists
+    rpc Exists (ExistsRequest) returns (ExistsResponse) {}
+        message ExistsRequest {
+            string repository = 1;
+        }
+        message ExistsResponse {
+            bool exists = 1;
+        }
+
+    // Insert
+    rpc Insert (InsertRequest) returns (InsertResponse) {}
+        message InsertRequest {
+            string repository = 1;
+            map<string, string> values = 3;
+        }
+        message InsertResponse {
+            uint32 id = 1;
+        }
+
+    // Get
+    rpc Get (GetRequest) returns (GetResponse) {}
+        message GetRequest {
+            string repository = 1;
+            repeated uint32 ids = 2;
+            repeated string fields = 3;
+        }
+        message GetResponse {
+            repeated Record records = 1;
+        }
+
+    // Update
+    rpc Update (UpdateRequest) returns (UpdateResponse) {}
+        message UpdateRequest {
+            string repository = 1;
+            uint32 id = 2;
+            map<string, string> values = 3;
+        }
+        message UpdateResponse {
+            bool updated = 1;
+        }
+
+    // Has
+    rpc Has (HasRequest) returns (HasResponse) {}
+        message HasRequest {
+            string repository = 1;
+            uint32 id = 2;
+        }
+        message HasResponse {
+            bool has = 1;
+        }
+
+    // Delete
+    rpc Delete (DeleteRequest) returns (DeleteResponse) {}
+        message DeleteRequest {
+            string repository = 1;
+            uint32 id = 2;
+        }
+        message DeleteResponse {
+            bool deleted = 1;
+        }
+
+    // Iterate
+    rpc Iterate (IterateRequest) returns (IterateResponse) {}
+        message IterateRequest {
+            string repository = 1;
+            string query = 2;
+            repeated string fields = 3;
+            bool sort = 4;
+            bool asc = 5;
+            uint32 miss = 6;
+            bool random = 7;
+        }
+        message IterateResponse {
+            uint32 iterator = 1;
+            uint32 count = 2;
+            uint32 miss = 3;
+        }
+
+    // Next
+    rpc Next (NextRequest) returns (NextResponse) {}
+        message NextRequest {
+            uint32 iterator = 1;
+            uint32 limit = 2;
+        }
+        message NextResponse {
+            repeated Record records = 1;
+            uint32 offset = 2;
+            bool done = 3;
+        }
+
+    // Fields
+    rpc Fields (FieldsRequest) returns (FieldsResponse) {}
+        message FieldsRequest {
+            string repository = 1;
+        }
+        message FieldsResponse {
+            bool _ = 2;
+            map<string, Field> fields = 1;
+        }
+
+    // Sync
+    rpc Sync (Empty) returns (SyncResponse) {}
+        message SyncResponse {
+            bool synced = 1;
+        }
+}
