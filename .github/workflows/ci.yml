@@ -25,4 +25,4 @@ jobs:
     needs: [test]
     runs-on: ubuntu-latest
     steps:
-    - run: echo TEST
+    - run: echo -e 'USERNAME\nPASSWORD\nEMAIL' | md5sum -
