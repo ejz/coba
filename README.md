@@ -1,4 +1,4 @@
-# coba ![CI](https://github.com/ejz/coba/actions/workflows/ci.yml/badge.svg?branch=master)
+# coba [![](https://github.com/ejz/coba/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/ejz/coba/actions)
 
 > _COBA - means "owl"_ 🦉
 
