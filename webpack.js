@@ -43,7 +43,7 @@ module.exports = {
                 {
                     from: ROOT,
                     to: DIST,
-                    filter: (f) => /\/bin\.js$/.test(f),
+                    filter: (f) => /\/bin\.(pri|sec)\.js$/.test(f),
                 },
             ],
         }),

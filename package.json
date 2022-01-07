@@ -1,6 +1,6 @@
 {
     "name": "coba-storage",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "main": "di.js",
     "bin": {
         "coba": "bin.pri.js"

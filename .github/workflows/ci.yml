@@ -32,7 +32,8 @@ jobs:
       with:
         node-version: 14.x
         cache: 'npm'
-    - run: echo -n '//registry.npmjs.org/:_authToken=' >.npmrc
-    - run: echo $NPM_TOKEN_SECRET >>.npmrc
     - run: npm ci
-    - run: npm publish
+    - run: npm run build
+    - run: echo -n '//registry.npmjs.org/:_authToken=' >dist/.npmrc
+    - run: echo $NPM_TOKEN_SECRET >>dist/.npmrc
+    - run: cd dist && npm publish
