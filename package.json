@@ -16,9 +16,7 @@
         "pretest": "npm run lint",
         "test": "jest --runInBand",
         "prebuild": "npm run test",
-        "build": "npm run webpack && node etc/package-json",
-        "prepublishOnly": "npm run build",
-        "publish": "cd dist && npm publish"
+        "build": "npm run webpack && node etc/package-json"
     },
     "dependencies": {
         "@grpc/grpc-js": "^1.3.6",
