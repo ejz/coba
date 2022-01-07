@@ -1,9 +1,9 @@
 {
     "name": "coba-storage",
-    "version": "1.0.2",
+    "version": "1.0.4",
     "main": "di.js",
     "bin": {
-        "coba": "bin.js"
+        "coba": "bin.pri.js"
     },
     "description": "An open sourced high-speed storage. Based on Roaring Bitmaps technology.",
     "author": "me@ejz.me",

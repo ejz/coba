@@ -9,12 +9,8 @@ let package = JSON.parse(fs.readFileSync(PACKAGE));
 
 let ver = package.version;
 
-// PATCH
-ver = ver.split('.');
-ver[ver.length - 1] = parseInt(ver[ver.length - 1]) + 1;
-ver = ver.join('.');
-
-// MINOR @TODO
+// DO NOTHING WITH VERSION
+// VERSION IS INCREASED MANUALLY
 
 package.version = ver;
 
