@@ -19,5 +19,5 @@ jobs:
         cache: 'npm'
     - run: docker run -e POSTGRES_PASSWORD=password -d postgres:latest
     - run: docker run -p 6379:6379 -d redislabs/redisearch:latest
-    - run: docker run -p 9200:9200 -p 9300:9300 -e "discovery.type=single-node" elasticsearch:latest
+    - run: docker run -p 9200:9200 -p 9300:9300 -e "discovery.type=single-node" elasticsearch:7.16.2
     - run: node etc/benchmark
