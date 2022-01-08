@@ -1,0 +1,23 @@
+name: Benchmark
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+
+  benchmark:
+    runs-on: ubuntu-latest
+    if: contains(github.event.commits[0].message, '[benchmark]')
+    steps:
+    - uses: actions/checkout@v2
+    - name: Setup Docker Buildx
+      uses: docker/setup-buildx-action@v1
+    - uses: actions/setup-node@v2
+      with:
+        node-version: 14.x
+        cache: 'npm'
+    - run: docker run -e POSTGRES_PASSWORD=password -d postgres:latest
+    - run: docker run -p 6379:6379 -d redislabs/redisearch:latest
+    - run: docker run -p 9200:9200 -p 9300:9300 -e "discovery.type=single-node" elasticsearch:latest
+    - run: node etc/benchmark
