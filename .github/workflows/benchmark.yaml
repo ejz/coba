@@ -9,6 +9,8 @@ jobs:
   benchmark:
     runs-on: ubuntu-latest
     if: contains(github.event.commits[0].message, '[benchmark]')
+    env:
+      DOCKER_USERNAME_SECRET: ${{ secrets.DOCKER_USERNAME_SECRET }}
     steps:
     - uses: actions/checkout@v2
     - name: Setup Docker Buildx
@@ -20,4 +22,7 @@ jobs:
     - run: docker run -e POSTGRES_PASSWORD=password -d postgres:latest
     - run: docker run -p 6379:6379 -d redislabs/redisearch:latest
     - run: docker run -p 9200:9200 -p 9300:9300 -e "discovery.type=single-node" elasticsearch:7.16.2
+    - run: docker run -p 20000:20000 ${{ env.DOCKER_USERNAME_SECRET }}/coba:latest
+    - run: cd etc ; npm init -y ; npm i coba-storage
+    - run: curl -o etc/airports.csv "https://davidmegginson.github.io/ourairports-data/airports.csv"
     - run: node etc/benchmark
