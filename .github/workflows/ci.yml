@@ -39,7 +39,7 @@ jobs:
     - run: cd dist && npm publish
 
   docker-publish:
-    needs: [test]
+    needs: [npm-publish]
     runs-on: ubuntu-latest
     if: contains(github.event.commits[0].message, '[publish]') || contains(github.event.commits[0].message, '[docker-publish]')
     env:
