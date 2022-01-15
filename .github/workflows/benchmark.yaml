@@ -19,10 +19,9 @@ jobs:
       with:
         node-version: 14.x
         cache: 'npm'
-    - run: docker run -e POSTGRES_PASSWORD=password -d postgres:latest
+    - run: docker run -p 5432:5432 -e POSTGRES_PASSWORD=password -d postgres:latest
     - run: docker run -p 6379:6379 -d redislabs/redisearch:latest
     - run: docker run -p 9200:9200 -p 9300:9300 -e "discovery.type=single-node" -d elasticsearch:7.16.2
     - run: docker run -p 20000:20000 -d ${{ env.DOCKER_USERNAME_SECRET }}/coba:latest
-    - run: cd etc ; npm init -y ; npm i coba-storage redis elasticsearch pg
-    - run: curl -o etc/airports.csv "https://davidmegginson.github.io/ourairports-data/airports.csv"
+    - run: cd etc ; npm init -y ; npm i coba-storage ioredis elasticsearch pg ejz-utils
     - run: node etc/benchmark
