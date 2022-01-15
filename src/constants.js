@@ -36,7 +36,7 @@ const DELAY_MIN = 1E3;
 
 exports.DELAY_MIN = DELAY_MIN;
 
-const SHARDS = '0123456789abcedf'.split('');
+const SHARDS = '0123456789abcedf'.split('').map((s) => s + '-');
 
 exports.SHARDS = SHARDS;
 

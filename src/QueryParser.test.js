@@ -7,6 +7,7 @@ test('QueryParser / tokenize', async () => {
     let qp = new QueryParser();
     let cases = [
         ['"asd"', 'ENTER_QUOTE_MODE QUOTED_VALUE EXIT_QUOTE_MODE'],
+        ['\'asd\'', 'ENTER_SQUOTE_MODE SQUOTED_VALUE EXIT_SQUOTE_MODE'],
         ['1', 'NUMERIC'],
         ['@f', 'IDENT_ALONE'],
         ['@f:a', 'IDENT VALUE'],
@@ -29,6 +30,10 @@ test('QueryParser / tokenize', async () => {
         ['%', null],
         ['^', null],
         ['$', null],
+        ['~', null],
+        ['*asd*', 'ALL VALUE ALL'],
+        ['asd*', 'VALUE ALL'],
+        ['*asd', 'ALL VALUE'],
         ['[ ( ,', 'RANGE_OPEN SPACE SPECIAL SPACE SPECIAL'],
     ];
     for (let [k, v] of cases) {
@@ -49,6 +54,11 @@ test('QueryParser / normalizeMergeQuote', async () => {
         ['"a"', 'a'],
         ['""', ''],
         ['"\\""', '"'],
+        [`'a'`, `a`],
+        [`''`, ``],
+        [`'\\''`, `'`],
+        [`'"'`, `"`],
+        [`"'"`, `'`],
     ];
     for (let [k, v] of cases) {
         let tokens = qp.tokenize(k);
@@ -63,6 +73,7 @@ test('QueryParser / normalizeMergeRange', async () => {
     let qp = new QueryParser();
     let cases = [
         ['a [ ( "1" , "2" ) ] @a', [true, '1', '2', true]],
+        [`a [ ( '1' , '2' ) ] @a`, [true, '1', '2', true]],
         ['[ ]', null],
         ['[()]', null],
         ['[[', null],
@@ -100,19 +111,23 @@ test('QueryParser / normalizeMergeRange', async () => {
 test('QueryParser / normalizeMergePrefix', async () => {
     let qp = new QueryParser();
     let cases = [
-        ['@a ~val', {value: 'val', allowPostfix: false, allowPrefix: true}],
-        ['@a val~', {value: 'val', allowPostfix: true, allowPrefix: false}],
-        ['@a ~val~', {value: 'val', allowPostfix: true, allowPrefix: true}],
-        ['@a val~', {value: 'val', allowPostfix: true, allowPrefix: false}],
-        ['@a ~"val"', {value: 'val', allowPostfix: false, allowPrefix: true}],
-        ['@a ~"val"~', {value: 'val', allowPostfix: true, allowPrefix: true}],
-        ['@a "val"~', {value: 'val', allowPostfix: true, allowPrefix: false}],
-        ['@a *~', null],
-        ['@a ~*', null],
-        ['@a~', null],
-        ['~@a', null],
-        ['val ~', null],
-        ['~ val', null],
+        ['val1*val2*val3', {placeholder: '*', value: 'val1*val2*val3'}],
+        ['"val1"*"val2"*"val3"', {placeholder: '*', value: 'val1*val2*val3'}],
+        ['"val1"*"*"*"val3"', {placeholder: '$', value: 'val1$*$val3'}],
+        ['"hello val1 "*" val2 hello"', {placeholder: '*', value: 'hello val1 * val2 hello'}],
+        ['@a *val', {value: 'val', allowPrefix: true}],
+        ['@a val*', {value: 'val', allowPostfix: true}],
+        ['@a *val*', {value: 'val', allowPostfix: true, allowPrefix: true}],
+        ['@a *"val"', {value: 'val', allowPrefix: true}],
+        ['@a "val"*', {value: 'val', allowPostfix: true}],
+        ['@a *"val"*', {value: 'val', allowPostfix: true, allowPrefix: true}],
+        ['@a *" val "*', {value: ' val ', allowPostfix: true, allowPrefix: true}],
+        ['@a *\' val \'*', {value: ' val ', allowPostfix: true, allowPrefix: true}],
+        ['@a *a*b*c*', {value: 'a*b*c', allowPostfix: true, allowPrefix: true, placeholder: '*'}],
+        ['@a *a*"b*"*c*', {value: 'a$b*$c', allowPostfix: true, allowPrefix: true, placeholder: '$'}],
+        ['@a a*"b*"*c*', {value: 'a$b*$c', allowPostfix: true, placeholder: '$'}],
+        ['@a *a*"b*"*c', {value: 'a$b*$c', allowPrefix: true, placeholder: '$'}],
+        ['@a *1*2*3', {value: '1*2*3', allowPrefix: true, placeholder: '*'}],
     ];
     for (let [q, res] of cases) {
         let tokens, token = null;
@@ -124,7 +139,7 @@ test('QueryParser / normalizeMergePrefix', async () => {
         } catch (e) {
         }
         if (token != null) {
-            expect(tokens.findIndex(({type}) => type == 'PREFIX')).toEqual(-1);
+            expect(tokens.findIndex(({type}) => type == 'ALL')).toEqual(-1);
         }
         expect(token).toEqual(res);
     }
@@ -183,6 +198,7 @@ test('QueryParser / tokens2infix / 1', async () => {
         return qp.tokens2infix(tokens, new Terms());
     };
     let cases = [
+        ['*', '1'],
         ['@a', '2'],
         ['@a (@a)', '2 & 2'],
         ['@a:*', '2'],

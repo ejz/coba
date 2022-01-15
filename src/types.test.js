@@ -15,33 +15,66 @@ test('types / getIdFromLiteral', () => {
     expect(types.getIdFromLiteral('100000000000000000')).toEqual(null);
 });
 
-test('types / makeWordsUnique', () => {
-    expect(types.makeWordsUnique('A B B C'.split(' '), false, false)).toEqual([['A', 'B', 'C'], false, false]);
-    expect(types.makeWordsUnique('B A B C'.split(' '), true, false)).toEqual([['A', 'B', 'C'], false, false]);
+test('types / normalizeText', async () => {
+    let notation2word = (notation) => {
+        return {
+            word: notation.replace(/(^\*|\*$)/g, ''),
+            allowPrefix: notation.startsWith('*'),
+            allowPostfix: notation.endsWith('*'),
+        };
+    };
+    let cases = [
+        ['*asd*', '*asd*'],
+        ['* asd*', 'asd*'],
+        ['*!asd*', 'asd*'],
+        ['* ! *', []],
+        ['*!*', []],
+        ['* 1 *', '1'],
+        ['*1*', '*1*'],
+        ['**', []],
+        ['*hi i\'m samatha*', '*hi,im,samatha*'],
+        ['A B B C', 'a,b,c'],
+        ['*B A B C', 'a,b,c'],
+        ['D C B C*', 'd,c,b'],
+        ['*A A A*', 'a'],
+        ['*A*', '*a*'],
+        ['*A a*', '*a*'],
+        ['*A a', 'a'],
+    ];
+    for (let [inp, out] of cases) {
+        let res = types.normalizeText(notation2word(inp).word, notation2word(inp));
+        expect(res).toEqual((Array.isArray(out) ? out : out.split(',')).map(notation2word));
+    }
 });
 
-test('types / getWordsFromFulltext / 1', () => {
+test('types / normalizeTexts', async () => {
+    let notation2word = (notation) => {
+        return {
+            word: notation.replace(/(^\*|\*$)/g, ''),
+            allowPrefix: notation.startsWith('*'),
+            allowPostfix: notation.endsWith('*'),
+        };
+    };
     let cases = [
-        [false, 'asd', false, false, ['asd'], false],
-        [false, 'asd foo asd bar', false, false, ['asd', 'foo', 'bar'], false],
-        [true, 'asd foo asd bar', false, false, ['foo', 'asd', 'bar'], false],
-        [false, 'asd bar foo bar', true, false, ['asd', 'bar', 'foo'], false],
-        [false, 'asd bar foo !', true, false, ['asd', 'bar', 'foo'], false],
-        [true, 'привет asd', false, false, ['asd'], false],
-        [false, 'asd привет', true, false, ['asd'], false],
-        [false, 'asd1_asd2', false, false, ['asd1', 'asd2'], false],
-        [false, 'a_b_c', false, false, ['a', 'b', 'c'], false],
-        [false, 'a_b_c_b', false, false, ['a', 'b', 'c'], false],
-        [false, 'aaa_bbb_ccc_bbb', false, false, ['aaa', 'bbb', 'ccc'], false],
-        [false, 'a_b_c_b', true, false, ['a', 'b', 'c'], false],
-        [true, 'b_a_b_c', false, false, ['a', 'b', 'c'], false],
+        ['*as*d*', '*as*d*'],
+        ['* a*b*c', 'a*b*c'],
+        ['* a *b*c', 'a,*b*c'],
+        ['* ! *b*c', '*b*c'],
+        ['a* ! *b*c', 'a*b*c'],
+        ['a* d *b*c', 'a*,d,*b*c'],
+        ['!*!', []],
+        [' ! *b*c', '*b*c'],
+        ['* ! * ! *a', '*a'],
+        ['*a*b c*d*', '*a*b,c*d*'],
+        ['a*!*b', 'a*b'],
+        ['a*!c!*b', 'a*,c,*b'],
+        ['!*b', '*b'],
+        ['b*!', 'b*'],
     ];
-    for (let [allowPrefix, fulltext, allowPostfix, _allowPrefix, words, _allowPostfix] of cases) {
-        expect(types.getWordsFromFulltext(fulltext, allowPrefix, allowPostfix)).toEqual([
-            words,
-            _allowPrefix,
-            _allowPostfix,
-        ]);
+    for (let [inp, out] of cases) {
+        let res = types.normalizeTexts(notation2word(inp).word, notation2word(inp));
+        res = res.map((r) => (delete r.placeholder, r));
+        expect(res).toEqual((Array.isArray(out) ? out : out.split(',')).map(notation2word));
     }
 });
 
@@ -60,32 +93,3 @@ test('types / genWords / 1', async () => {
     let gen3 = types.genWords('o');
     expect(gen3.length).toEqual(utils.unique(gen3).length);
 });
-
-// test('utils / expandInt / 1', async () => {
-//     expect(utils.expandInt(6, 2)).toEqual([
-//         parseInt('0000011000', 2),
-//         parseInt('0000011011', 2),
-//     ]);
-//     expect(utils.expandInt(255, 0)).toEqual([
-//         parseInt('11111111', 2),
-//         parseInt('11111111', 2),
-//     ]);
-// });
-
-// test('utils / convertDateTimeToNumber', async () => {
-//     expect(utils.convertDateTimeToNumber(String(1e6))).toEqual(null);
-//     expect(utils.convertDateTimeToNumber('1971')).toEqual(365 * 3600 * 24);
-//     expect(utils.convertDateTimeToNumber('1972', '1971')).toEqual(365 * 3600 * 24);
-//     expect(utils.convertDateTimeToNumber('2020-08-02', '2020-08-01')).toEqual(24 * 3600);
-//     expect(utils.convertDateTimeToNumber('2020-08-02', '2020-08-01 00:00:00')).toEqual(24 * 3600);
-//     expect(utils.convertDateTimeToNumber('2020-08-02', '2020-08-01 12:00:00')).toEqual(12 * 3600);
-//     expect(utils.convertDateTimeToNumber('2020-08-02', '2020-08-01 23:00:00')).toEqual(3600);
-//     expect(utils.convertDateTimeToNumber('2020-08-02', '2020-08-01 23:59:00')).toEqual(60);
-//     expect(utils.convertDateTimeToNumber('2020-08-02', '2020-08-01 23:59:59')).toEqual(1);
-//     expect(utils.convertDateToNumber('2020-08-02', '2020-07-31')).toEqual(2);
-// });
-
-// test('utils / convertDateToNumber', async () => {
-//     expect(utils.convertDateToNumber(String(1e6))).toEqual(null);
-//     expect(utils.convertDateToNumber('1970-02-01')).toEqual(31);
-// });

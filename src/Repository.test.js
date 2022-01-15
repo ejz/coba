@@ -161,21 +161,21 @@ test('Repository / fulltext / 2', () => {
     let cases = [
         ['foo', [1]],
         ['m n', [4]],
-        ['foo~', [1, 2]],
-        ['fo~', [1, 2]],
-        ['f~', [1, 2]],
-        ['o~', [4]],
-        ['~oo~', [1, 2]],
-        ['~a~', [3]],
-        ['"bar ba"~', [3]],
-        ['"ba ba"~', []],
-        ['fo~ & -foo', [2]],
-        ['fo~ -foo', [2]],
+        ['foo*', [1, 2]],
+        ['fo*', [1, 2]],
+        ['f*', [1, 2]],
+        ['o*', [4]],
+        ['*oo*', [1, 2]],
+        ['*a*', [3]],
+        ['"bar ba"*', [3]],
+        ['"ba ba"*', []],
+        ['fo* & -foo', [2]],
+        ['fo* -foo', [2]],
         ['baz', [3]],
         ['bar baz', [3]],
         ['baz bar', [3]],
-        ['~m~', [4]],
-        ['~oo~', [1, 2]],
+        ['*m*', [4]],
+        ['*oo*', [1, 2]],
         ['"baz bar"', [3]],
         ['"bar baz"', [3]],
     ];
@@ -208,6 +208,29 @@ test('Repository / fulltext notnull case', () => {
     expect(() => r.insert({})).not.toThrow();
     r.insert({text: 'hi'}); // 3
     expect([...r.iterate('@text')].map(([id]) => id)).toEqual([3]);
+});
+
+test('Repository / fulltext / innerpart', () => {
+    let r = getRepository({text: {type: 'Fulltext'}});
+    r.insert({text: 'food'}); // 1
+    r.insert({text: 'fod'}); // 2
+    r.insert({text: 'mfod'}); // 3
+    r.insert({text: 'dod'}); // 4
+    let cases = [
+        ['f*d', [1, 2]],
+        ['f*""*d', [1, 2]],
+        ['f*"!"*d', [1, 2]],
+        ['f*" ! "*d', [1, 2]],
+        ['fo*d', [1, 2]],
+        ['f*od', [1, 2]],
+        ['*f*d', [1, 2, 3]],
+        ['m*d', [3]],
+        ['m*od', [3]],
+        ['mf*od', [3]],
+    ];
+    for (let [query, res] of cases) {
+        expect([...r.iterate(query)].map(([id]) => id)).toEqual(res);
+    }
 });
 
 test('Repository / types / 1', () => {

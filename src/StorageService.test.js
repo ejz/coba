@@ -246,3 +246,13 @@ test('StorageService / Constructor', async () => {
         expect(String(rec)).toMatch(/^REC:\d+$/);
     }
 });
+
+test('StorageService / QueryParserError', async () => {
+    let c = await getClient();
+    expect(await c.isAlive()).toEqual(true);
+    await c.Create({repository: 'r'});
+    let err = await c.Iterate({repository: 'r', query: '****'}).catch(String);
+    expect(err).toMatch(/RepositoryQueryError/);
+    expect(err).toMatch(/QueryParserInvalidSyntaxError/);
+    expect(err).toMatch('****');
+});

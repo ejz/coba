@@ -5,7 +5,7 @@ const utils = require('ejz-utils');
 const {Terms} = require('./Terms');
 const {Field} = require('./Field');
 const {Bitmap} = require('./Bitmap');
-const {QueryParser} = require('./QueryParser');
+const {QueryParser, QueryParserError} = require('./QueryParser');
 const {RecordDiskCache} = require('./RecordDiskCache');
 
 const {
@@ -492,6 +492,7 @@ class Repository {
 
     iterate(query, fields, sort, asc, miss, random) {
         query = query ?? '*';
+        let _query = query;
         if (fields != null) {
             this.checkFields(fields, null);
         }
@@ -514,12 +515,20 @@ class Repository {
         if (sort != null && !sort.isNotNull) {
             query = `(${query}) @${sort}`;
         }
-        let terms = new Terms();
-        let tokens = this.queryParser.tokenize(query);
-        tokens = this.queryParser.normalize(tokens);
-        let infix = this.queryParser.tokens2infix(tokens, terms);
-        let postfix = this.queryParser.infix2postfix(infix);
-        let bitmap = this.resolve(postfix, terms);
+        let bitmap;
+        try {
+            let terms = new Terms();
+            let tokens = this.queryParser.tokenize(query);
+            tokens = this.queryParser.normalize(tokens);
+            let infix = this.queryParser.tokens2infix(tokens, terms);
+            let postfix = this.queryParser.infix2postfix(infix);
+            bitmap = this.resolve(postfix, terms);
+        } catch (err) {
+            let expected = err instanceof QueryParserError;
+            let msg = [err.constructor.name, expected ? err.message : null, _query];
+            msg = msg.filter(Boolean).join(': ');
+            throw new (expected ? RepositoryQueryError : RepositoryUnknownQueryError)(msg);
+        }
         let iterator;
         if (random && bitmap.count) {
             let intervals = this.splitInterval(bitmap.min, bitmap.max, 1000);
@@ -612,11 +621,11 @@ class Repository {
                 return ret(f.resolveRange(value));
             }
             if (hasValue) {
+                let {value} = term;
                 if (f.isFulltext) {
-                    term.value = utils.isObject(term.value) ? term.value : {value: term.value};
-                    term.value.field = f;
+                    value = utils.isObject(value) ? {...value, field: f} : {value, field: f};
                 }
-                return ret(f.resolveValue(term.value));
+                return ret(f.resolveValue(value));
             }
         } else {
             if (hasRange) {
@@ -628,9 +637,9 @@ class Repository {
                     return ret(0);
                 }
                 return ret(Bitmap.or(...values.map((field) => {
-                    term.value = utils.isObject(term.value) ? term.value : {value: term.value};
-                    term.value.field = field;
-                    return field.resolveValue(term.value);
+                    let {value} = term;
+                    value = utils.isObject(value) ? {...value, field} : {value, field};
+                    return field.resolveValue(value);
                 })));
             }
         }
@@ -1017,3 +1026,11 @@ exports.RepositoryInvalidSecondaryFieldError = RepositoryInvalidSecondaryFieldEr
 class RepositoryEvaluateExpressionError extends RepositoryError {}
 
 exports.RepositoryEvaluateExpressionError = RepositoryEvaluateExpressionError;
+
+class RepositoryQueryError extends RepositoryError {}
+
+exports.RepositoryQueryError = RepositoryQueryError;
+
+class RepositoryUnknownQueryError extends RepositoryError {}
+
+exports.RepositoryUnknownQueryError = RepositoryUnknownQueryError;

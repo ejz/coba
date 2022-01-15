@@ -36,10 +36,6 @@ const rules = {
         /^(\*)/,
         () => [''],
     ],
-    PREFIX: [
-        /^([~])/,
-        () => [''],
-    ],
     // & - AND
     // | - OR
     // () - para
@@ -62,6 +58,20 @@ const rules = {
         /^([^"\\]+|\\"|\\\\|\\)/,
         (m) => ['', m[1]],
         'QUOTE',
+    ],
+    ENTER_SQUOTE_MODE: [
+        /^'/,
+        () => ['', null, 'SQUOTE'],
+    ],
+    EXIT_SQUOTE_MODE: [
+        /^'/,
+        () => ['', null, ''],
+        'SQUOTE',
+    ],
+    SQUOTED_VALUE: [
+        /^([^'\\]+|\\'|\\\\|\\)/,
+        (m) => ['', m[1]],
+        'SQUOTE',
     ],
     RANGE_OPEN: [
         /^\[/,
@@ -111,10 +121,6 @@ class QueryParser {
             if (token.type == 'NUMERIC') {
                 token.type = 'VALUE';
             }
-            if (token.type == 'ALL') {
-                token.type = 'VALUE';
-                token.value = null;
-            }
             if (token.type == 'SPECIAL') {
                 token.type = token.value;
                 token.special = true;
@@ -129,15 +135,23 @@ class QueryParser {
         let filter = (token) => {
             switch (token.type) {
                 case 'ENTER_QUOTE_MODE':
+                case 'ENTER_SQUOTE_MODE':
                     value = [];
                     return false;
                 case 'QUOTED_VALUE':
+                case 'SQUOTED_VALUE':
                     value.push(token.value);
                     return false;
                 case 'EXIT_QUOTE_MODE':
+                case 'EXIT_SQUOTE_MODE':
+                    if (token.type == 'EXIT_QUOTE_MODE') {
+                        token.value = value.join('').replace(/\\("|\\)/g, '$1');
+                        token.quoted = true;
+                    } else {
+                        token.value = value.join('').replace(/\\('|\\)/g, '$1');
+                        token.squoted = true;
+                    }
                     token.type = 'VALUE';
-                    token.value = value.join('').replace(/\\("|\\)/g, '$1');
-                    token.quoted = true;
                     return true;
                 default:
                     return true;
@@ -232,33 +246,52 @@ class QueryParser {
         let replace = (allowPrefix, allowPostfix) => {
             return (m, val) => {
                 val = +val;
-                if (tokens[val].value == null) {
-                    throw new QueryParserInvalidSyntaxError();
+                if (!utils.isObject(tokens[val].value)) {
+                    tokens[val].value = {value: tokens[val].value};
                 }
-                tokens[val] = {
-                    type: 'VALUE',
-                    value: {
-                        value: tokens[val].value,
-                        allowPostfix,
-                        allowPrefix,
-                    },
-                };
                 if (allowPrefix) {
                     tokens[val - 1] = false;
+                    tokens[val].value.allowPrefix = true;
                 }
                 if (allowPostfix) {
                     tokens[val + 1] = false;
+                    tokens[val].value.allowPostfix = true;
                 }
-                return '';
+                return val + '-VALUE ';
             };
         };
-        infix = infix.replace(/\d+-PREFIX (\d+)-VALUE \d+-PREFIX /g, replace(true, true));
-        infix = infix.replace(/\d+-PREFIX (\d+)-VALUE /g, replace(true, false));
-        infix = infix.replace(/(\d+)-VALUE \d+-PREFIX /g, replace(false, true));
-        if (/\d+-PREFIX /.test(infix)) {
-            throw new QueryParserInvalidSyntaxError();
-        }
+        infix = infix.replace(/(\d+)-VALUE (\d+-ALL \d+-VALUE )+/g, (m) => {
+            let ints = m.match(/\d+-/g).map((v) => parseInt(v));
+            let vals = [];
+            ints.forEach((int, i) => {
+                if (i % 2 == 0) {
+                    vals.push(tokens[int].value);
+                }
+            });
+            let placeholders = ['*', '$', '-' + Number(new Date()) + '-'];
+            let placeholder;
+            while (!placeholder) {
+                let v = placeholders.shift();
+                if (!vals.some((val) => val.includes(v))) {
+                    placeholder = v;
+                }
+            }
+            let first = ints.shift();
+            tokens[first].value = {placeholder, value: vals.join(placeholder)};
+            ints.forEach((int) => tokens[int] = false);
+            tokens = tokens.filter(Boolean);
+            return first + '-VALUE ';
+        });
+        infix = infix.replace(/\d+-ALL (\d+)-VALUE /g, replace(true, null));
+        infix = infix.replace(/(\d+)-VALUE \d+-ALL /g, replace(null, true));
+        infix;
         tokens = tokens.filter(Boolean);
+        for (let token of tokens) {
+            if (token.type == 'ALL') {
+                token.type = 'VALUE';
+                token.value = null;
+            }
+        }
         return tokens;
     }
 

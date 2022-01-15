@@ -922,66 +922,26 @@ const _Fulltext = compose(_BaseBitmapIndex, {
     deserializeFromDisk: _String.deserializeFromDisk,
     serializeToIndex: getFulltextValue,
     resolveValue(field, val) {
-        return Bitmap.and(...val.map((v) => {
-            return Bitmap.or(...v.map((v) => {
-                return Bitmap.or(...v.map((v) => {
-                    return Bitmap.and(...v.map((v) => field.multipleBitmaps.bitmaps[v]).filter(Boolean));
-                }));
-            }));
-        }).filter(Boolean));
+        let resolve = (val) => {
+            if (typeof(val) == 'string') {
+                return field.multipleBitmaps.bitmaps[val];
+            }
+            if (!val.length) {
+                return new Bitmap();
+            }
+            let call = 'and';
+            if (val[0] == '|') {
+                call = 'or';
+                val = val.slice(1);
+            }
+            return Bitmap[call](...val.map(resolve));
+        };
+        return resolve(val);
     },
     default_trackall: false,
 });
 
 exports.Fulltext = _Fulltext;
-
-function makeWordsUnique(words, allowPrefix, allowPostfix) {
-    if (words.length <= 1) {
-        return [words, allowPrefix, allowPostfix];
-    }
-    if (!allowPrefix && !allowPostfix) {
-        return [suniq(words), allowPrefix, allowPostfix];
-    }
-    let first = allowPrefix ? words.shift() : null;
-    let last = allowPostfix ? words.pop() : null;
-    words = suniq(words);
-    if (first == '') {
-        allowPrefix = false;
-    } else if (first != null && ~words.findIndex((w) => w == first)) {
-        allowPrefix = false;
-    }
-    if (last == '') {
-        allowPostfix = false;
-    } else if (last != null && ~words.findIndex((w) => w == last)) {
-        allowPostfix = false;
-    }
-    let _words = [];
-    if (allowPrefix) {
-        _words.push(first);
-    }
-    _words.push(...words);
-    if (allowPostfix) {
-        _words.push(last);
-    }
-    return [_words, allowPrefix, allowPostfix];
-}
-
-exports.makeWordsUnique = makeWordsUnique;
-
-function getWordsFromFulltext(fulltext, allowPrefix, allowPostfix) {
-    let words = fulltext.trim().split(/\s+/);
-    [words, allowPrefix, allowPostfix] = makeWordsUnique(words, allowPrefix, allowPostfix);
-    let collect = [];
-    for (let word of words) {
-        word = utils.normalize(word);
-        collect.push(...word.split(' '));
-    }
-    [words, allowPrefix, allowPostfix] = makeWordsUnique(collect, allowPrefix, allowPostfix);
-    words = words.filter(Boolean);
-    return [words, allowPrefix, allowPostfix];
-}
-
-exports.getWordsFromFulltext = getWordsFromFulltext;
 
 function getIdFromLiteral(val) {
     let v = +val;
@@ -998,42 +958,215 @@ function getIdFromLiteral(val) {
 exports.getIdFromLiteral = getIdFromLiteral;
 
 function getFulltextValue(fulltext) {
-    let fromSearch = utils.isObject(fulltext);
-    let field = fromSearch ? fulltext.field : null;
-    let [words, allowPrefix, allowPostfix] = getWordsFromFulltext(...[
-        (fromSearch ? fulltext.value : fulltext),
-        (fromSearch ? fulltext.allowPrefix : false),
-        (fromSearch ? fulltext.allowPostfix : false),
-    ]);
-    let len = words.length;
+    if (utils.isObject(fulltext)) {
+        return getFulltextValueComplex(fulltext);
+    }
+    let words = normalizeText(fulltext);
     let sl = SHARDS.length;
-    let result = words.map((word, i) => {
-        let _allowPrefix = (allowPrefix && (i == 0));
-        let _allowPostfix = (allowPostfix && (i == len - 1));
-        let shards = (_allowPrefix || _allowPostfix) ? SHARDS : [SHARDS[crc32.calculate(word) % sl]];
-        word = (_allowPrefix ? '' : '$') + word + (_allowPostfix ? '' : '$');
-        let words = word.length < 3 ? genWords(word) : [word];
-        return shards.map((shard) => {
-            let subs = [];
-            l: for (let word of words) {
-                let and = [];
-                for (let i = 0; i < word.length - 2; i++) {
-                    let w = word.substring(i, i + 3);
-                    let s = shard + '-' + w;
-                    if (fromSearch && !field.multipleBitmaps.bitmaps[s]) {
-                        continue l;
-                    }
-                    and.push(s);
-                }
-                subs.push(and);
-            }
-            return subs;
-        });
+    let ret = [];
+    words.forEach(({word}) => {
+        let shard = SHARDS[crc32.calculate(word) % sl];
+        word = '$' + word + '$';
+        let l = word.length;
+        for (let i = 0; i < l - 2; i++) {
+            ret.push(shard + word.substring(i, i + 3));
+        }
     });
-    return fromSearch ? result : result.flat(3);
+    return ret;
 }
 
 exports.getFulltextValue = getFulltextValue;
+
+function getFulltextValueComplex({value, allowPrefix, allowPostfix, placeholder, field}) {
+    allowPrefix = allowPrefix ?? false;
+    allowPostfix = allowPostfix ?? false;
+    if (placeholder != null) {
+        return getFulltextValuePlaceholder({value, allowPrefix, allowPostfix, placeholder, field});
+    }
+    let words = normalizeText(value, {allowPrefix, allowPostfix});
+    let sl = SHARDS.length;
+    let and = [];
+    for (let {allowPrefix, word, allowPostfix} of words) {
+        let possibleShards = (allowPrefix || allowPostfix) ? SHARDS : [SHARDS[crc32.calculate(word) % sl]];
+        word = (allowPrefix ? '' : '$') + word + (allowPostfix ? '' : '$');
+        let possibleWords = word.length < 3 ? genWords(word) : [word];
+        let found = possibleShards.map((shard) => {
+            let found = possibleWords.map((word) => {
+                return searchWordOnShard(word, shard, field);
+            }).filter(Boolean);
+            if (!found.length) {
+                return;
+            }
+            found.unshift('|');
+            return found;
+        }).filter(Boolean);
+        if (!found.length) {
+            return [];
+        }
+        found.unshift('|');
+        and.push(found);
+    }
+    return and;
+}
+
+exports.getFulltextValueComplex = getFulltextValueComplex;
+
+function searchWordOnShard(word, shard, field) {
+    let l = word.length;
+    let ret = [];
+    for (let i = 0; i < l - 2; i++) {
+        let w = word.substring(i, i + 3);
+        let s = shard + w;
+        if (!field.multipleBitmaps.bitmaps[s]) {
+            return;
+        }
+        ret.push(s);
+    }
+    return ret;
+}
+
+exports.searchWordOnShard = searchWordOnShard;
+
+function getFulltextValuePlaceholder({value, allowPrefix, allowPostfix, placeholder, field}) {
+    let words = normalizeTexts(value, {allowPrefix, allowPostfix, placeholder});
+    let sl = SHARDS.length;
+    let and = [];
+    for (let {allowPrefix, word, allowPostfix, placeholder} of words) {
+        let possibleShards = (allowPrefix || allowPostfix || placeholder != null) ? SHARDS : [SHARDS[crc32.calculate(word) % sl]];
+        word = (allowPrefix ? '' : '$') + word + (allowPostfix ? '' : '$');
+        let possibleWords = word.length < 3 ? genWords(word) : [word];
+        let found = possibleShards.map((shard) => {
+            let found = possibleWords.map((word) => {
+                if (placeholder == null) {
+                    return searchWordOnShard(word, shard, field);
+                }
+                let words = word.split(placeholder);
+                let and = [];
+                for (let word of words) {
+                    if (word.length < 3) {
+                        let _words = genWords(word).map((word) => {
+                            return searchWordOnShard(word, shard, field);
+                        }).filter(Boolean);
+                        if (!_words.length) {
+                            return;
+                        }
+                        _words.unshift('|');
+                        and.push(_words);
+                        continue;
+                    }
+                    let found = searchWordOnShard(word, shard, field);
+                    if (!found) {
+                        return;
+                    }
+                    and.push(found);
+                }
+                return and;
+            }).filter(Boolean);
+            if (!found.length) {
+                return;
+            }
+            found.unshift('|');
+            return found;
+        }).filter(Boolean);
+        if (!found.length) {
+            return [];
+        }
+        found.unshift('|');
+        and.push(found);
+    }
+    return and;
+}
+
+exports.getFulltextValuePlaceholder = getFulltextValuePlaceholder;
+
+function normalizeText(text, extra) {
+    extra = extra ?? {};
+    let {allowPrefix, allowPostfix} = extra;
+    allowPrefix = allowPrefix ?? false;
+    allowPostfix = allowPostfix ?? false;
+    let startsWithDelimiter = /^\s+/.test(text);
+    let endsWithDelimiter = /\s+$/.test(text);
+    if (startsWithDelimiter || endsWithDelimiter) {
+        text = text.replace(/^\s+|\s+$/g, '');
+    }
+    text = text.replace(/([a-zA-Z0-9])[']([a-zA-Z0-9])/g, '$1$2');
+    text = text.replace(/[^a-zA-Z0-9]+/g, ' ');
+    let startsWithSpace = text.startsWith(' ');
+    let endsWithSpace = text.endsWith(' ');
+    if (startsWithSpace || endsWithSpace) {
+        text = text.trim();
+    }
+    text = text.toLowerCase();
+    if (text == '') {
+        return [];
+    }
+    let words = text.split(' ');
+    allowPrefix = allowPrefix && !startsWithDelimiter && !startsWithSpace;
+    allowPostfix = allowPostfix && !endsWithDelimiter && !endsWithSpace;
+    if (words.length == 1) {
+        return [{word: words[0], allowPrefix, allowPostfix}];
+    }
+    let first = allowPrefix ? words.shift() : null;
+    let last = allowPostfix ? words.pop() : null;
+    words = suniq(words);
+    if (first != null && words.includes(first)) {
+        allowPrefix = false;
+    }
+    if (last != null && words.includes(last)) {
+        allowPostfix = false;
+    }
+    if (allowPrefix && first != null) {
+        words.unshift(first);
+    }
+    if (allowPostfix && last != null) {
+        words.push(last);
+    }
+    if (allowPrefix && allowPostfix && words.length == 2 && words[0] == words[1]) {
+        words.pop();
+    }
+    let l = words.length;
+    return words.map((word, i) => ({
+        word,
+        allowPrefix: allowPrefix && (i == 0),
+        allowPostfix: allowPostfix && (i == l - 1),
+    }));
+}
+
+exports.normalizeText = normalizeText;
+
+function normalizeTexts(texts, extra) {
+    extra = extra ?? {};
+    let {allowPrefix, allowPostfix, placeholder} = extra;
+    allowPrefix = allowPrefix ?? false;
+    allowPostfix = allowPostfix ?? false;
+    placeholder = placeholder ?? '*';
+    texts = texts.split(placeholder);
+    let collect = [];
+    let l = texts.length;
+    let last;
+    for (let i = 0; i < l; i++) {
+        let isFirst = i == 0;
+        let isLast = i == l - 1;
+        let text = texts[i];
+        let words = normalizeText(text, {
+            allowPrefix: !isFirst || allowPrefix,
+            allowPostfix: !isLast || allowPostfix,
+        });
+        for (let {word, allowPrefix, allowPostfix} of words) {
+            if (last != null && last.allowPostfix && allowPrefix) {
+                last.allowPostfix = allowPostfix;
+                last.placeholder = placeholder;
+                last.word += placeholder + word;
+            } else {
+                last = {word, allowPrefix, allowPostfix};
+                collect.push(last);
+            }
+        }
+    }
+    return collect;
+}
+
+exports.normalizeTexts = normalizeTexts;
 
 const chars = '0123456789abcdefghijklmnopqrstuvwxyz$'.split('');
 

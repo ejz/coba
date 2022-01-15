@@ -232,7 +232,7 @@ class StorageService extends AbstractService {
     changeError(err, req) {
         if (err instanceof RepositoryError) {
             let msg = [err.constructor.name, req.repository, err.message];
-            msg = msg.filter((e) => e != null).join(': ');
+            msg = msg.filter(Boolean).join(': ');
             let c = AbstractServiceInternalError;
             if (
                 err instanceof RepositoryInvalidFieldError ||
