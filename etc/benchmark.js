@@ -59,7 +59,7 @@ const SELECT_BY_INDEX = 'select using index';
 const COUNT_BY_INDEX = 'count using index';
 const SELECT_BY_RANGE = 'select using numeric range';
 const COUNT_BY_RANGE = 'count using numeric range';
-const SORT_BY_RANGE = 'sort using numeric range';
+const SORT_NUMERIC = 'sort using numeric index';
 const SELECT_BY_MULTI = 'complex index search';
 const COUNT_BY_MULTI = 'complex index count';
 const FULLTEXT = 'fulltext search';
@@ -69,24 +69,24 @@ const SUBSTRING = 'substring search';
 const RANDOM_UPDATE = 'randomly update all';
 const RANDOM_DELETE = 'randomly delete all';
 
-const cases = [
-    SELECT_BY_PK,
-    SELECT_ALL,
-    COUNT_ALL,
-    SELECT_BY_INDEX,
-    COUNT_BY_INDEX,
-    SELECT_BY_RANGE,
-    COUNT_BY_RANGE,
-    SORT_BY_RANGE,
-    SELECT_BY_MULTI,
-    COUNT_BY_MULTI,
-    FULLTEXT,
-    LOOKAHEAD,
-    LOOKBEHIND,
-    SUBSTRING,
-    RANDOM_UPDATE,
-    RANDOM_DELETE,
-];
+const cases = {
+    [SELECT_BY_PK]: true,
+    [SELECT_ALL]: true,
+    [COUNT_ALL]: true,
+    [SELECT_BY_INDEX]: true,
+    [COUNT_BY_INDEX]: true,
+    [SELECT_BY_RANGE]: true,
+    [COUNT_BY_RANGE]: true,
+    [SORT_NUMERIC]: false,
+    [SELECT_BY_MULTI]: true,
+    [COUNT_BY_MULTI]: true,
+    [FULLTEXT]: true,
+    [LOOKAHEAD]: true,
+    [LOOKBEHIND]: true,
+    [SUBSTRING]: true,
+    [RANDOM_UPDATE]: true,
+    [RANDOM_DELETE]: true,
+};
 
 const clients = [
     getJsonClient(),
@@ -150,7 +150,7 @@ const timings = {};
         timings[key][client.name] = Number(new Date()) - ms;
     }
     // CASES
-    for (let _case of cases) {
+    for (let [_case, doSort] of Object.entries(cases)) {
         if (argv.filter != null && !_case.includes(argv.filter)) {
             continue;
         }
@@ -166,7 +166,7 @@ const timings = {};
             check[client.name] = idents;
             timings[_case][client.name] = Number(new Date()) - ms;
         }
-        for (let wrong of checkEqual(check)) {
+        for (let wrong of checkEqual(check, doSort)) {
             timings[_case][wrong] = -1;
         }
     }
@@ -183,25 +183,28 @@ return;
 function generateData(total, seed) {
     let data = [];
     let idents = {};
+    let mins = {};
     let gen = utils.sgen(seed);
     for (let i = 1; i <= total; i++) {
         let ident = gen('${char}${char}${char}${rand(1,2000)}').toUpperCase();
-        if (idents[ident]) {
+        let min = +gen('${rand(1,1E6)}');
+        if (idents[ident] || mins[min]) {
             continue;
         }
         idents[ident] = true;
+        mins[min] = true;
         data.push({
             ident,
             name: gen('${word} ${word} ${word} ${word}'),
             country: gen('${rand([country,""])}') || null,
-            min: +gen('${rand(1,1E6)}'),
+            min,
             max: +gen('${rand(1,1E6)}'),
         });
     }
     return data;
 }
 
-function checkEqual(dict) {
+function checkEqual(dict, doSort) {
     let sort = (arr) => {
         if (!Array.isArray(arr)) {
             return;
@@ -228,8 +231,10 @@ function checkEqual(dict) {
     for (let i = 1; i < entries.length; i++) {
         let [, v0] = entries[0];
         let [ki, vi] = entries[i];
-        sort(v0);
-        sort(vi);
+        if (doSort) {
+            sort(v0);
+            sort(vi);
+        }
         if (!eq(v0, vi)) {
             wrong.push(ki);
         }
@@ -346,6 +351,16 @@ function getJsonClient() {
                         let hi = rand(lo, 1E6);
                         let idents = pairs.map(([i, min]) => (lo <= min && min <= hi) ? i : null).filter(Boolean);
                         ret.push(idents.length);
+                    }
+                    return ret;
+                },
+                [SORT_NUMERIC]: ({countries}) => {
+                    let ret = [];
+                    let pairs = Object.values(this.db).map(({ident: i, country: c, min}) => [i, c, min]);
+                    for (let country of countries) {
+                        let idents = pairs.map(([i, c, m]) => c == country ? [i, m] : null).filter(Boolean);
+                        idents.sort(([, m1], [, m2]) => m1 - m2);
+                        ret.push(idents.map(([i]) => i));
                     }
                     return ret;
                 },
@@ -545,6 +560,15 @@ function getCobaClient() {
                         let hi = rand(lo, 1E6);
                         let iterator = await this.client.Iterate({repository: 'item', query: {min: [lo, hi]}, fields: ['ident']});
                         ret.push(iterator.count);
+                    }
+                    return ret;
+                },
+                [SORT_NUMERIC]: async ({countries}) => {
+                    let ret = [];
+                    for (let country of countries) {
+                        let iterator = await this.client.Iterate({repository: 'item', query: {country}, sort: 'min', fields: ['ident']});
+                        let records = await utils.iteratorToArray(iterator.iterate(10000));
+                        ret.push(records.map(({values}) => values.ident));
                     }
                     return ret;
                 },
@@ -755,6 +779,14 @@ function getPostgresClient() {
                     }
                     return ret;
                 },
+                [SORT_NUMERIC]: async ({countries}) => {
+                    let ret = [];
+                    for (let country of countries) {
+                        let {rows} = await this.client.query('SELECT ident FROM item WHERE country = $1 ORDER BY min ASC', [country]);
+                        ret.push(rows.map((row) => row.ident));
+                    }
+                    return ret;
+                },
                 [SELECT_BY_MULTI]: async ({seed, countries}) => {
                     let ret = [];
                     let rand = utils.srand(seed + 'multi');
@@ -847,7 +879,7 @@ function getRedisearchClient() {
                 'FT.CREATE', 'item', 'SCHEMA',
                 'ident', 'TAG',
                 'country', 'TAG',
-                'min', 'NUMERIC',
+                'min', 'NUMERIC', 'SORTABLE',
                 'max', 'NUMERIC',
                 'name', 'TEXT',
             );
@@ -988,6 +1020,22 @@ function getRedisearchClient() {
                             'LIMIT', '0', '0',
                         );
                         ret.push(res.shift());
+                    }
+                    return ret;
+                },
+                [SORT_NUMERIC]: async ({countries}) => {
+                    let ret = [];
+                    for (let country of countries) {
+                        let res = await this.client.call(
+                            'FT.SEARCH', 'item',
+                            `@country:{${country}}`,
+                            'SORTBY', 'min', 'ASC',
+                            'RETURN', '1', 'ident',
+                            'LIMIT', '0', '1000000',
+                        );
+                        res.shift();
+                        res = utils.chunk(res, 2);
+                        ret.push(res.map((r) => r.pop().pop()));
                     }
                     return ret;
                 },
