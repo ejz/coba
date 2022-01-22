@@ -31,11 +31,6 @@ module.exports = {
         new CopyPlugin({
             patterns: [
                 {
-                    from: SRC,
-                    to: DIST,
-                    filter: (f) => f.endsWith('.proto'),
-                },
-                {
                     from: ETC,
                     to: DIST,
                     filter: (f) => f.endsWith('.ini'),
