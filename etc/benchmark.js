@@ -5,7 +5,7 @@ const fs = require('fs');
 const {diff} = require('jest-diff');
 const utils = require('ejz-utils');
 const {Client} = require('pg');
-const coba = require('../src/di'); // todo
+const coba = require('coba-storage');
 const Redis = require('ioredis');
 const elasticsearch = require('elasticsearch');
 
