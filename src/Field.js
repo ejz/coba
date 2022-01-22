@@ -170,6 +170,10 @@ class Field {
             }),
         };
     }
+
+    sort(bitmap, asc) {
+        return this.type.sort(this, bitmap, asc);
+    }
 }
 
 exports.Field = Field;

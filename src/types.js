@@ -672,6 +672,9 @@ const _BaseBitSliceIndex = compose(_Base, {
     resolveValue(field, val) {
         return field.bsi.getBitmap(val, val);
     },
+    sort(field, bitmap, asc) {
+        return field.bsi.sort(bitmap, asc);
+    },
 });
 
 const _BooleanIndex = compose(_BaseBitSliceIndex, {

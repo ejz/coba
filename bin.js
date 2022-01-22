@@ -7,38 +7,42 @@ const path = require('path');
 const tcpPortUsed = require('tcp-port-used');
 const utils = require('ejz-utils');
 
+const VERSION = require('./package').version;
+const [BIN] = Object.keys(require('./package').bin);
+
 const ROOT = __dirname;
 const CWD = process.cwd();
+const IS_ROOT = os.userInfo().uid === 0;
+const HOME = os.homedir();
+const VARLIB = '/var/lib';
 
 const DI = path.resolve(ROOT, 'di.js');
 const DI_ALT = path.resolve(ROOT, 'src', 'di.js');
 const di = require(utils.isFile(DI) ? DI : DI_ALT);
 
-const _CONFIG = 'config.ini';
+const CONFIG_FILE = 'config.ini';
+const CONFIG_DIR = '.coba';
+const RPC_NAME = 'StorageRpc';
 
-let CONFIG_DEFAULT = path.resolve(ROOT, _CONFIG);
-let CONFIG_DEFAULT_ALT = path.resolve(ROOT, 'etc', _CONFIG);
+const CONFIG_DEFAULT = path.resolve(ROOT, CONFIG_FILE);
+const CONFIG_DEFAULT_ALT = path.resolve(ROOT, 'etc', CONFIG_FILE);
+const CONFIG_HOME = (!IS_ROOT && utils.isDirectory(HOME)) ? path.resolve(HOME, CONFIG_DIR, CONFIG_FILE) : null;
+const CONFIG_VARLIB = (IS_ROOT && utils.isDirectory(VARLIB)) ? path.resolve(VARLIB, CONFIG_DIR, CONFIG_FILE) : null;
 
-if (!utils.isFile(CONFIG_DEFAULT)) {
-    CONFIG_DEFAULT = CONFIG_DEFAULT_ALT;
-}
+let _v_c_d = utils.isFile(CONFIG_DEFAULT);
+let _v_c_d_a = utils.isFile(CONFIG_DEFAULT_ALT);
 
-if (!utils.isFile(CONFIG_DEFAULT)) {
-    console.log('INVALID CONFIG');
+if (!((+_v_c_d) ^ (+_v_c_d_a))) {
+    console.log('INVALID DEFAULT CONFIG');
     process.exit(1);
 }
 
-const sec = require('./bin.sec');
-
-const CONFIGS = [CONFIG_DEFAULT];
-const HOME = os.homedir();
-
-if (utils.isDirectory(HOME)) {
-    let file = path.resolve(HOME, sec.HOME_DIR, _CONFIG);
-    if (utils.isFile(file)) {
-        CONFIGS.push(file);
-    }
-}
+const CONFIGS = [
+    CONFIG_DEFAULT,
+    CONFIG_DEFAULT_ALT,
+    CONFIG_HOME,
+    CONFIG_VARLIB,
+];
 
 const OK = '[OK]';
 const ERR = '[ERR]';
@@ -72,8 +76,7 @@ try {
 let actions = Object.create(null);
 
 function actionVersion() {
-    let {version} = require('./package');
-    console.log('version:', version);
+    console.log('version:', VERSION);
 }
 
 actions.version = {action: actionVersion, help: 'version'};
@@ -159,8 +162,7 @@ async function actionStart() {
         console.log(ERR, 'interface is occupied:', interf);
         return 1;
     }
-    let method = 'make' + sec.SERVICE + 'Server';
-    await di[method]({interf});
+    await di.makeStorageRpcServer({interf});
     console.log(OK, 'STARTED', '..', interf);
 }
 
@@ -172,12 +174,9 @@ actions.start = {action: actionStart, help: 'start', listen: true};
 
 let action = argv._.shift();
 
-if (!action) {
+if (action == null) {
+    console.log(`Try '${BIN} help' for more information.`);
     process.exit(1);
-}
-
-if (sec.getActions) {
-    actions = Object.assign(actions, sec.getActions({}));
 }
 
 let before = utils.remap(actions, (k, v) => {

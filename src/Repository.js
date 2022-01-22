@@ -524,7 +524,7 @@ class Repository {
             let postfix = this.queryParser.infix2postfix(infix);
             bitmap = this.resolve(postfix, terms);
         } catch (err) {
-            let expected = err instanceof QueryParserError;
+            let expected = (err instanceof QueryParserError) || (err instanceof RepositoryError);
             let msg = [err.constructor.name, expected ? err.message : null, _query];
             msg = msg.filter(Boolean).join(': ');
             throw new (expected ? RepositoryQueryError : RepositoryUnknownQueryError)(msg);

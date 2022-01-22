@@ -72,6 +72,10 @@ class Storage {
         return Object.keys(this.repositories);
     }
 
+    exists(repository) {
+        return this.repositories[repository] != null;
+    }
+
     create(name, fields) {
         fields = fields ?? {};
         if (this.repositories[name]) {

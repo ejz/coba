@@ -1,18 +1,8 @@
-const path = require('path');
-
-const SRC_ROOT = __dirname;
-
-exports.SRC_ROOT = SRC_ROOT;
-
-const ROOT = path.resolve(SRC_ROOT, '..');
-
-exports.ROOT = ROOT;
-
-const NOOP = () => {};
+const NOOP = (() => {});
 
 exports.NOOP = NOOP;
 
-const V2V = (v) => v;
+const V2V = ((v) => v);
 
 exports.V2V = V2V;
 

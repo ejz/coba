@@ -932,3 +932,14 @@ test('Repository / Object / 1', () => {
         'a.bb.0': 1,
     });
 });
+
+test('Repository / sort bug', async () => {
+    let r = getRepository({a: {type: 'String'}, s: {type: 'NumberIndex'}});
+    r.insert({a: 'one', s: 2});
+    r.insert({a: 'two', s: 3});
+    r.insert({a: 'three', s: 1});
+    let records1 = [...r.iterate('*', null, 's', true)];
+    expect(records1.map((rec) => rec.pop().s)).toEqual([1, 2, 3]);
+    let records2 = [...r.iterate('*', null, 's', false)];
+    expect(records2.map((rec) => rec.pop().s)).toEqual([3, 2, 1]);
+});

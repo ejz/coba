@@ -1,34 +1,34 @@
 const utils = require('ejz-utils');
 
 const {
-    StorageServiceClient,
-    makeStorageServiceServer,
-    makeStorageServiceClient,
+    StorageRpcClient,
+    makeStorageRpcServer,
+    makeStorageRpcClient,
     onShutdown,
 } = require('./di');
 
 afterEach(onShutdown);
 
-function getClient(options) {
-    return getServerClient(options).then((r) => r.client);
+function getRpcClient(options) {
+    return getRpcServerClient(options).then((r) => r.client);
 }
 
-async function getServerClient(options) {
+async function getRpcServerClient(options) {
     options = options ?? {};
     options.interf = options.interf ?? utils.getRandomInterface();
-    let server = await makeStorageServiceServer(options);
-    let client = makeStorageServiceClient(options);
+    let client = makeStorageRpcClient(options);
+    let server = await makeStorageRpcServer(options);
     return {server, client};
 }
 
-test('StorageService / isAlive', async () => {
-    let c = await getClient();
+test('StorageRpc / isAlive', async () => {
+    let c = await getRpcClient();
     expect(await c.isAlive()).toEqual(true);
 });
 
-test('StorageService / List, Create, Drop, Exists', async () => {
-    let c = await getClient();
-    expect(await c.List()).toEqual({});
+test('StorageRpc / List, Create, Drop, Exists', async () => {
+    let c = await getRpcClient();
+    expect(await c.List()).toEqual({repositories: []});
     expect(await c.Create({repository: 'r'})).toEqual({created: true});
     expect(await c.Create({repository: 'r'})).toEqual({created: false});
     expect(await c.List()).toEqual({repositories: ['r']});
@@ -36,11 +36,11 @@ test('StorageService / List, Create, Drop, Exists', async () => {
     expect(await c.Drop({repository: 'r'})).toEqual({dropped: true});
     expect(await c.Exists({repository: 'r'})).toEqual({exists: false});
     expect(await c.Drop({repository: 'r'})).toEqual({dropped: false});
-    expect(await c.List()).toEqual({});
+    expect(await c.List()).toEqual({repositories: []});
 });
 
-test('StorageService / Insert, Get, Has, Delete', async () => {
-    let c = await getClient();
+test('StorageRpc / Insert, Get, Has, Delete', async () => {
+    let c = await getRpcClient();
     let res1 = await c.Insert().catch((e) => e);
     expect(res1 instanceof Error).toEqual(true);
     let res2 = await c.Insert({repository: 'r'}).catch((e) => e);
@@ -63,8 +63,8 @@ test('StorageService / Insert, Get, Has, Delete', async () => {
     expect(res8.has).toEqual(false);
 });
 
-test('StorageService / Iterate, Next', async () => {
-    let c = await getClient();
+test('StorageRpc / Iterate, Next', async () => {
+    let c = await getRpcClient();
     await c.Create({repository: 'r'});
     for (let i = 1; i <= 1000; i++) {
         await c.Insert({repository: 'r'});
@@ -113,8 +113,8 @@ test('StorageService / Iterate, Next', async () => {
     expect(Math.abs(count - 900) < 100).toEqual(true);
 });
 
-test('StorageService / Fields', async () => {
-    let c = await getClient();
+test('StorageRpc / Fields', async () => {
+    let c = await getRpcClient();
     let cases = [
         [{type: 'String'}, {type: 'String', notnull: false}],
         [{type: 'String', notnull: true}, {type: 'String', notnull: true}],
@@ -130,8 +130,8 @@ test('StorageService / Fields', async () => {
     }
 });
 
-test('StorageService / values', async () => {
-    let c = await getClient();
+test('StorageRpc / values', async () => {
+    let c = await getRpcClient();
     let repository = 'r';
     await c.Create({repository, fields: {
         string: {type: 'String'},
@@ -149,8 +149,8 @@ test('StorageService / values', async () => {
     expect(_record.values).toEqual({string: 's', bool: true, number: 5});
 });
 
-test('StorageService / Update', async () => {
-    let c = await getClient();
+test('StorageRpc / Update', async () => {
+    let c = await getRpcClient();
     let repository = 'r';
     await c.Create({repository, fields: {string: {type: 'String'}}});
     let {id} = await c.Insert({repository, values: {string: 's'}});
@@ -170,8 +170,8 @@ test('StorageService / Update', async () => {
     expect(rec2.values).toEqual({string: '_'});
 });
 
-test('StorageService / Lock', async () => {
-    let c = await getClient();
+test('StorageRpc / Lock', async () => {
+    let c = await getRpcClient();
     let repository = 'r';
     await c.Create({repository});
     let {repositories} = await c.List();
@@ -186,16 +186,16 @@ test('StorageService / Lock', async () => {
     expect(res4).toEqual({synced: true});
 });
 
-test('StorageService / LoggerLevel', async () => {
-    let c = await getClient();
+test('StorageRpc / LoggerLevel', async () => {
+    let c = await getRpcClient();
     await c.SetLoggerLevel({}).catch(String);
     let {level} = await c.GetLoggerLevel();
     expect(!!level).toEqual(true);
 });
 
-test('StorageService / Unique Fields', async () => {
+test('StorageRpc / Unique Fields', async () => {
     let repository = 'r';
-    let c = await getClient();
+    let c = await getRpcClient();
     let {created} = await c.Create({
         repository,
         fields: {
@@ -211,15 +211,14 @@ test('StorageService / Unique Fields', async () => {
     expect(created).toEqual(true);
 });
 
-test('StorageService / Constructor', async () => {
-    class MyClient extends StorageServiceClient {
+test('StorageRpc / Constructor', async () => {
+    class MyRpcClient extends StorageRpcClient {
         IteratePostProcess(res) {
             let iterator = super.IteratePostProcess(res);
             let _iterate = iterator.iterate.bind(iterator);
             iterator.iterate = (limit, chunk) => {
                 limit = limit ?? 2;
                 chunk = chunk ?? true;
-                // return _iterate(limit, chunk);
                 return utils.iteratorMap(_iterate(limit, chunk), (rec) => {
                     rec.toString = () => 'REC:' + rec.id;
                     return rec;
@@ -228,7 +227,7 @@ test('StorageService / Constructor', async () => {
             return iterator;
         }
     }
-    let c = await getClient({_constructor: MyClient});
+    let c = await getRpcClient({_constructor: MyRpcClient});
     expect(await c.isAlive()).toEqual(true);
     await c.Create({repository: 'r'});
     for (let i = 1; i <= 1000; i++) {
@@ -247,8 +246,8 @@ test('StorageService / Constructor', async () => {
     }
 });
 
-test('StorageService / QueryParserError', async () => {
-    let c = await getClient();
+test('StorageRpc / QueryParserError', async () => {
+    let c = await getRpcClient();
     expect(await c.isAlive()).toEqual(true);
     await c.Create({repository: 'r'});
     let err = await c.Iterate({repository: 'r', query: '****'}).catch(String);

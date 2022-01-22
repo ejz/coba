@@ -3,18 +3,14 @@ const utils = require('ejz-utils');
 const {Storage} = require('./Storage');
 const {Repository} = require('./Repository');
 
-const {
-    StorageService,
-    StorageServiceServer,
-    StorageServiceClient,
-} = require('./StorageService');
+const {StorageRpcServer} = require('./StorageRpcServer');
+const {StorageRpcClient} = require('./StorageRpcClient');
 
 const {
     makeStorage,
     makeRepository,
-    makeStorageService,
-    makeStorageServiceServer,
-    makeStorageServiceClient,
+    makeStorageRpcServer,
+    makeStorageRpcClient,
     onShutdown,
 } = require('./di');
 
@@ -28,18 +24,14 @@ test('di / makeRepository', () => {
     expect(makeRepository() instanceof Repository).toEqual(true);
 });
 
-test('di / makeStorageService', () => {
-    expect(makeStorageService() instanceof StorageService).toEqual(true);
+test('di / makeStorageRpcServer', async () => {
+    let interf = utils.getRandomInterface();
+    let server = await makeStorageRpcServer({interf});
+    expect(server instanceof StorageRpcServer).toEqual(true);
 });
 
-test('di / makeStorageServiceServer', async () => {
+test('di / makeStorageRpcClient', async () => {
     let interf = utils.getRandomInterface();
-    let server = await makeStorageServiceServer({interf});
-    expect(server instanceof StorageServiceServer).toEqual(true);
-});
-
-test('di / makeStorageServiceClient', async () => {
-    let interf = utils.getRandomInterface();
-    let client = makeStorageServiceClient({interf});
-    expect(client instanceof StorageServiceClient).toEqual(true);
+    let client = makeStorageRpcClient({interf});
+    expect(client instanceof StorageRpcClient).toEqual(true);
 });
