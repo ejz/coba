@@ -1,6 +1,6 @@
 {
     "name": "coba-storage",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "main": "di.js",
     "bin": {
         "coba": "bin.js"
@@ -21,10 +21,12 @@
         "pretest": "npm run lint",
         "test": "jest --runInBand",
         "prebuild": "npm run test",
-        "build": "npm run webpack && node etc/package-json"
+        "build": "npm run webpack && node etc/package-json",
+        "pretestbin": "npm run build",
+        "testbin": "cp bin.test.js dist && cd dist && chmod a+x bin.js && npm i -D jest && npx jest"
     },
     "dependencies": {
-        "ejz-utils": "^1.5.19",
+        "ejz-utils": "^1.5.21",
         "fast-crc32c": "^2.0.0",
         "roaring": "^1.0.6",
         "tcp-port-used": "^1.0.2"
